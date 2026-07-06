@@ -2,7 +2,7 @@ import type { Request, Response } from 'express'
 import { ruleList } from '../src/data/governanceRules'
 import { evaluateGovernance, type GovernanceEvaluation } from '../src/lib/governanceEngine'
 import type { AgentResult, GovernanceCheckResult, SecurityMode } from '../src/types'
-import { callOpenRouter, toChatTurns } from './openRouterClient'
+import { callAnthropic, toChatTurns } from './anthropicClient'
 import { buildProtectedSystemPrompt, buildUnsafeSystemPrompt } from './systemPrompts'
 
 const BLOCKED_MESSAGE = 'Governance Layer Blocked Request'
@@ -41,17 +41,17 @@ export async function handleChat(req: Request, res: Response): Promise<void> {
   }
 
   const { mode, message, history = [] } = req.body
-  const apiKey = process.env.OPENROUTER_API_KEY
-  const model = process.env.OPENROUTER_MODEL ?? 'google/gemini-2.5-flash'
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  const model = process.env.ANTHROPIC_MODEL ?? 'claude-haiku-4-5-20251001'
   const turns = [...toChatTurns(history), { role: 'user' as const, content: message }]
 
   if (mode === 'unsafe') {
     if (!apiKey) {
-      res.status(500).json({ error: 'OPENROUTER_API_KEY is not configured on the server.' })
+      res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured on the server.' })
       return
     }
 
-    const result = await callOpenRouter({
+    const result = await callAnthropic({
       apiKey,
       model,
       systemInstruction: buildUnsafeSystemPrompt(),
@@ -104,11 +104,11 @@ export async function handleChat(req: Request, res: Response): Promise<void> {
   }
 
   if (!apiKey) {
-    res.status(500).json({ error: 'OPENROUTER_API_KEY is not configured on the server.' })
+    res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured on the server.' })
     return
   }
 
-  const result = await callOpenRouter({
+  const result = await callAnthropic({
     apiKey,
     model,
     systemInstruction: buildProtectedSystemPrompt(ruleList),
