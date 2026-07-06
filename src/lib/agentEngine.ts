@@ -1,38 +1,28 @@
-import { detectDangerKeyword } from '../data/governanceRules'
-import { getSafeResponse, getUnsafeDangerResponse } from '../data/mockResponses'
 import type { AgentResult, SecurityMode } from '../types'
 
-const BLOCKED_MESSAGE = 'Governance Layer Blocked Request'
+export const GOVERNANCE_CHECK_DELAY_MS = 400
 
-export function processMessage(input: string, mode: SecurityMode): AgentResult {
-  const keyword = detectDangerKeyword(input)
-
-  if (mode === 'unsafe') {
-    if (keyword) {
-      return {
-        blocked: false,
-        message: getUnsafeDangerResponse(keyword),
-        matchedKeyword: keyword,
-      }
-    }
-    return {
-      blocked: false,
-      message: getSafeResponse(input),
-    }
-  }
-
-  if (keyword) {
-    return {
-      blocked: true,
-      message: BLOCKED_MESSAGE,
-      matchedKeyword: keyword,
-    }
-  }
-
-  return {
-    blocked: false,
-    message: getSafeResponse(input),
-  }
+interface RequestAgentReplyParams {
+  mode: SecurityMode
+  message: string
+  history: { role: 'user' | 'agent'; content: string }[]
 }
 
-export const GOVERNANCE_CHECK_DELAY_MS = 400
+export async function requestAgentReply({
+  mode,
+  message,
+  history,
+}: RequestAgentReplyParams): Promise<AgentResult> {
+  const res = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode, message, history }),
+  })
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error ?? `Request failed with status ${res.status}.`)
+  }
+
+  return res.json() as Promise<AgentResult>
+}

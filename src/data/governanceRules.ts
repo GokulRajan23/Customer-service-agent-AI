@@ -1,13 +1,63 @@
-import type { GovernanceCard, GovernanceCheck } from '../types'
+import type { GovernanceCard, GovernanceCheck, GovernanceRule } from '../types'
 
-export const dangerKeywords = [
-  'ignore instructions',
-  'ignore company policy',
-  'system override',
-  'developer mode',
-  'refund all orders',
-  'cancel all customer orders',
-] as const
+export const ruleList: GovernanceRule[] = [
+  {
+    id: 'ignore-instructions',
+    pattern: 'ignore instructions',
+    category: 'injection',
+    riskLevel: 'HIGH',
+    action: 'Blocked',
+    description: 'Attempts to override the agent’s system instructions are never followed.',
+  },
+  {
+    id: 'ignore-company-policy',
+    pattern: 'ignore company policy',
+    category: 'injection',
+    riskLevel: 'HIGH',
+    action: 'Blocked',
+    description: 'Attempts to bypass company policy are never followed.',
+  },
+  {
+    id: 'system-override',
+    pattern: 'system override',
+    category: 'injection',
+    riskLevel: 'HIGH',
+    action: 'Blocked',
+    description: 'Claims of system-level override authority are never honored.',
+  },
+  {
+    id: 'developer-mode',
+    pattern: 'developer mode',
+    category: 'injection',
+    riskLevel: 'HIGH',
+    action: 'Blocked',
+    description: 'Requests to enable an unrestricted "developer mode" are never honored.',
+  },
+  {
+    id: 'refund-all-orders',
+    pattern: 'refund all orders',
+    category: 'permission',
+    riskLevel: 'HIGH',
+    action: 'Blocked',
+    description: 'Bulk refunds require explicit management authorization the agent does not have.',
+  },
+  {
+    id: 'cancel-all-customer-orders',
+    pattern: 'cancel all customer orders',
+    category: 'permission',
+    riskLevel: 'HIGH',
+    action: 'Blocked',
+    description: 'Bulk order cancellation requires explicit management authorization the agent does not have.',
+  },
+  {
+    id: 'issue-discount-coupon',
+    pattern: 'issue a discount coupon',
+    category: 'financial',
+    riskLevel: 'MEDIUM',
+    action: 'Restricted',
+    description: 'Coupon issuance requires manager approval and spending limit validation.',
+  },
+]
 
 export const governanceChecks: GovernanceCheck[] = [
   { id: 'injection', label: 'Prompt Injection Detection' },
@@ -36,13 +86,3 @@ export const governanceCards: GovernanceCard[] = [
     description: 'High-risk financial action. Blocked without explicit authorization.',
   },
 ]
-
-export function detectDangerKeyword(input: string): string | null {
-  const normalized = input.toLowerCase().trim()
-  for (const keyword of dangerKeywords) {
-    if (normalized.includes(keyword)) {
-      return keyword
-    }
-  }
-  return null
-}

@@ -1,9 +1,9 @@
-import { Loader2, Send } from 'lucide-react'
+import { Check, Loader2, Send, X } from 'lucide-react'
 import { useCallback, useRef, useState, type FormEvent } from 'react'
 import { useSecurityMode } from '../../contexts/SecurityModeContext'
 import { governanceChecks } from '../../data/governanceRules'
-import { GOVERNANCE_CHECK_DELAY_MS, processMessage } from '../../lib/agentEngine'
-import type { Message } from '../../types'
+import { GOVERNANCE_CHECK_DELAY_MS, requestAgentReply } from '../../lib/agentEngine'
+import type { GovernanceCheckResult, Message } from '../../types'
 import { ExamplePrompts } from './ExamplePrompts'
 import { MessageBubble } from './MessageBubble'
 
@@ -32,13 +32,15 @@ export function ChatInterface() {
   const [input, setInput] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
   const [activeChecks, setActiveChecks] = useState<string[]>([])
+  const [checkResults, setCheckResults] = useState<GovernanceCheckResult[] | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [])
 
-  const runGovernanceChecks = async (): Promise<void> => {
+  const revealGovernanceChecks = async (results: GovernanceCheckResult[]): Promise<void> => {
+    setCheckResults(results)
     for (const check of governanceChecks) {
       setActiveChecks((prev) => [...prev, check.id])
       await new Promise((resolve) => setTimeout(resolve, GOVERNANCE_CHECK_DELAY_MS))
@@ -50,23 +52,35 @@ export function ChatInterface() {
     if (!trimmed || isProcessing) return
 
     const userMessage = createMessage('user', trimmed)
+    const history = messages
+      .filter((message) => message.role !== 'system' && !message.blocked)
+      .map((message) => ({ role: message.role as 'user' | 'agent', content: message.content }))
+
     setMessages((prev) => [...prev, userMessage])
     setInput('')
     setIsProcessing(true)
     setActiveChecks([])
+    setCheckResults(null)
     scrollToBottom()
 
-    const result = processMessage(trimmed, mode)
+    try {
+      const result = await requestAgentReply({ mode, message: trimmed, history })
 
-    if (isProtected) {
-      await runGovernanceChecks()
+      if (isProtected) {
+        await revealGovernanceChecks(result.checks)
+      }
+
+      const agentMessage = createMessage('agent', result.reply, result.blocked)
+      setMessages((prev) => [...prev, agentMessage])
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Something went wrong.'
+      setMessages((prev) => [...prev, createMessage('system', errorMessage)])
+    } finally {
+      setActiveChecks([])
+      setCheckResults(null)
+      setIsProcessing(false)
+      scrollToBottom()
     }
-
-    const agentMessage = createMessage('agent', result.message, result.blocked)
-    setMessages((prev) => [...prev, agentMessage])
-    setActiveChecks([])
-    setIsProcessing(false)
-    scrollToBottom()
   }
 
   const handleSubmit = (e: FormEvent) => {
@@ -81,29 +95,47 @@ export function ChatInterface() {
           <MessageBubble key={message.id} message={message} />
         ))}
 
-        {isProcessing && isProtected && activeChecks.length > 0 && (
+        {isProcessing && isProtected && checkResults === null && (
+          <div className="flex items-center gap-2 text-xs text-emerald-700">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Evaluating request against governance rules...
+          </div>
+        )}
+
+        {isProcessing && isProtected && checkResults !== null && (
           <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
             <p className="mb-2 text-xs font-semibold text-emerald-800">
               Running governance checks...
             </p>
             <ul className="space-y-1">
-              {governanceChecks.map((check) => (
-                <li
-                  key={check.id}
-                  className={`flex items-center gap-2 text-xs transition-all duration-300 ${
-                    activeChecks.includes(check.id)
-                      ? 'text-emerald-700'
-                      : 'text-slate-400'
-                  }`}
-                >
-                  {activeChecks.includes(check.id) ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    <span className="h-3 w-3" />
-                  )}
-                  {check.label}
-                </li>
-              ))}
+              {governanceChecks.map((check) => {
+                const revealed = activeChecks.includes(check.id)
+                const flagged =
+                  checkResults.find((result) => result.id === check.id)?.status === 'flagged'
+                return (
+                  <li
+                    key={check.id}
+                    className={`flex items-center gap-2 text-xs transition-all duration-300 ${
+                      revealed
+                        ? flagged
+                          ? 'text-red-600'
+                          : 'text-emerald-700'
+                        : 'text-slate-400'
+                    }`}
+                  >
+                    {revealed ? (
+                      flagged ? (
+                        <X className="h-3 w-3" />
+                      ) : (
+                        <Check className="h-3 w-3" />
+                      )
+                    ) : (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    )}
+                    {check.label}
+                  </li>
+                )
+              })}
             </ul>
           </div>
         )}
