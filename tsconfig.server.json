@@ -17,5 +17,5 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["server", "src/types", "src/data/governanceRules.ts", "src/lib/governanceEngine.ts"]
+  "include": ["server", "api", "src/types", "src/data/governanceRules.ts", "src/lib/governanceEngine.ts"]
 }

@@ -1,9 +1,18 @@
-import type { Request, Response } from 'express'
 import { ruleList } from '../src/data/governanceRules'
 import { evaluateGovernance, type GovernanceEvaluation } from '../src/lib/governanceEngine'
 import type { AgentResult, GovernanceCheckResult, SecurityMode } from '../src/types'
 import { callAnthropic, toChatTurns } from './anthropicClient'
 import { buildProtectedSystemPrompt, buildUnsafeSystemPrompt } from './systemPrompts'
+
+// Structural types so this handler runs unmodified under both the local
+// Express server (server/index.ts) and a Vercel serverless function (api/chat.ts).
+interface ChatRequest {
+  body: unknown
+}
+interface ChatResponse {
+  status(code: number): ChatResponse
+  json(body: unknown): void
+}
 
 const BLOCKED_MESSAGE = 'Governance Layer Blocked Request'
 const RESTRICTED_MESSAGE =
@@ -34,7 +43,7 @@ function buildChecks(evaluation: GovernanceEvaluation): GovernanceCheckResult[] 
   ]
 }
 
-export async function handleChat(req: Request, res: Response): Promise<void> {
+export async function handleChat(req: ChatRequest, res: ChatResponse): Promise<void> {
   if (!isValidBody(req.body)) {
     res.status(400).json({ error: 'Invalid request body.' })
     return
